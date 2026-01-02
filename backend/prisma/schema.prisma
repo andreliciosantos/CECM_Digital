@@ -1,14 +1,118 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// Configuração do cliente e banco de dados
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. Segurança e Acesso
+enum Role {
+  ADMIN
+  PROFESSOR
+  STUDENT
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Deve ser armazenada com hash (BCrypt)
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile   Profile?
+}
+
+// 2. Perfis e Dados Pessoais
+model Profile {
+  id        String   @id @default(uuid())
+  firstName String
+  lastName  String
+  cpf       String   @unique
+  phone     String?
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  student   Student?
+  teacher   Teacher?
+}
+
+// 3. Entidades Académicas
+model Teacher {
+  id        String   @id @default(uuid())
+  profileId String   @unique
+  profile   Profile  @relation(fields: [profileId], references: [id])
+  subjects  Subject[]
+}
+
+model Student {
+  id           String   @id @default(uuid())
+  registration String   @unique // RA (Registro Acadêmico)
+  profileId    String   @unique
+  profile      Profile  @relation(fields: [profileId], references: [id])
+  enrollments  Enrollment[]
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  subjects    Subject[]
+  classes     Class[]
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  name      String
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  teacherId String?
+  teacher   Teacher? @relation(fields: [teacherId], references: [id])
+  grades    Grade[]
+  attendances Attendance[]
+}
+
+model Class {
+  id        String   @id @default(uuid())
+  name      String   // Ex: Turma A - 2026
+  year      Int
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  enrollments Enrollment[]
+}
+
+// 4. Lógica de Negócio (Notas e Presença)
+model Enrollment {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  status    String   @default("ACTIVE") // ACTIVE, INACTIVE, GRADUATED
+
+  grades      Grade[]
+  attendances Attendance[]
+
+  @@unique([studentId, classId]) // Garante que um aluno não se matricula duas vezes na mesma turma
+}
+
+model Grade {
+  id           String   @id @default(uuid())
+  value        Float
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+  subjectId    String
+  subject      Subject    @relation(fields: [subjectId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model Attendance {
+  id           String   @id @default(uuid())
+  date         DateTime
+  isPresent    Boolean
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+  subjectId    String
+  subject      Subject    @relation(fields: [subjectId], references: [id])
 }
